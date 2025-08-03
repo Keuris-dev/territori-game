@@ -1,0 +1,285 @@
+<!DOCTYPE html>  <html>    <head>    
+  <title>Mini Galimulator</title>    
+  <style>    
+    body {    
+      font-family: sans-serif;    
+      text-align: center;    
+      background: #111;    
+      color: white;    
+      margin: 0;    
+      padding: 0;    
+    }    
+    #mainMenu, #gameUI {    
+      padding: 20px;    
+    }    
+    #grid {    
+      display: grid;    
+      grid-template-columns: repeat(10, 32px);    
+      gap: 2px;    
+      margin: 20px auto;    
+      width: max-content;    
+    }    
+    .tile {    
+      width: 32px;    
+      height: 32px;    
+      background: #444;    
+      font-size: 9px;    
+      color: white;    
+      display: flex;    
+      align-items: center;    
+      justify-content: center;    
+      cursor: pointer;    
+      position: relative;    
+      text-align: center;    
+    }    
+    .main { background: red; }    
+    .ai1 { background: green; }    
+    .ai2 { background: blue; }    
+    .barrack::after {    
+      content: "🏰";    
+      position: absolute;    
+      top: -5px;    
+      right: -5px;    
+      font-size: 12px;    
+    }    
+    .wall {    
+      background: #222;    
+      pointer-events: none;    
+    }    
+    .label {    
+      position: absolute;    
+      font-size: 8px;    
+      top: 8px;    
+      left: 0;    
+      right: 0;    
+      text-align: center;    
+      color: white;    
+      pointer-events: none;    
+    }    
+    button {    
+      padding: 10px 20px;    
+      margin: 10px;    
+      font-size: 16px;    
+      cursor: pointer;    
+      background-color: #333;    
+      color: white;    
+      border: none;    
+      border-radius: 5px;    
+    }    
+    button:hover {    
+      background-color: #555;    
+    }    
+  </style>    
+</head>    
+<body>    <div id="mainMenu">    
+    <h1>Mini Galimulator</h1>    
+    <label>Nama Kerajaan:</label>    
+    <input id="kingdomInput" placeholder="Kerajaan Besar">    
+    <br>    
+    <button onclick="startGame()">Mulai</button>    
+  </div>    <div id="gameUI" style="display:none;">    
+    <div id="info"><span id="kingdomName">Kerajaan Besar</span></div>    
+    <div id="timer">Sisa waktu: 300 detik</div>    
+    <div id="grid"></div>    
+    <button onclick="buildBarrack()">Bangun Barak</button>    
+  </div>    <script>    
+    const grid = document.getElementById("grid");    
+    const timerDiv = document.getElementById("timer");    
+    const mainMenu = document.getElementById("mainMenu");    
+    const gameUI = document.getElementById("gameUI");    
+    const kingdomInput = document.getElementById("kingdomInput");    
+    const kingdomName = document.getElementById("kingdomName");    const names = {    
+  main: "Kerajaan",    
+  ai1: "Zorion",    
+  ai2: "Velmar"    
+};    
+
+let tiles = [], troops = {}, barracks = new Set();    
+let timeLeft = 300;    
+let growLoop, aiLoop, timerLoop;    
+
+function startGame() {    
+  mainMenu.style.display = "none";    
+  gameUI.style.display = "block";    
+  const name = kingdomInput.value || "Kerajaan";    
+  names.main = name;    
+  kingdomName.textContent = name;    
+  createGrid();    
+  growLoop = setInterval(autoGrow, 1000);    
+  aiLoop = setInterval(aiActions, 3000);    
+  timerLoop = setInterval(updateTimer, 1000);    
+}    
+
+function createGrid() {    
+  for (let i = 0; i < 100; i++) {    
+    let div = document.createElement("div");    
+    div.classList.add("tile");    
+    div.dataset.index = i;    
+
+    // tambahkan dinding (penghalang) di tepi    
+    let row = Math.floor(i / 10);    
+    let col = i % 10;    
+    if (row === 0 || row === 9 || col === 0 || col === 9) {    
+      div.classList.add("wall");    
+    } else {    
+      div.onclick = () => handleClick(i);    
+    }    
+
+    troops[i] = 0;    
+    tiles.push(div);    
+    grid.appendChild(div);    
+  }    
+
+  // tempatkan kerajaan di dalam kotak    
+  setOwner(22, "main"); troops[22] = 10;    
+  setOwner(77, "ai1"); troops[77] = 10;    
+  setOwner(44, "ai2"); troops[44] = 10;    
+
+  updateTiles();    
+}    
+
+function setOwner(index, owner) {    
+  if (tiles[index].classList.contains("wall")) return;    
+  tiles[index].className = "tile";    
+  tiles[index].classList.add(owner);    
+  if (barracks.has(index)) tiles[index].classList.add("barrack");    
+}    
+
+function getOwner(index) {    
+  if (tiles[index].classList.contains("wall")) return null;    
+  const cls = tiles[index].classList;    
+  if (cls.contains("main")) return "main";    
+  if (cls.contains("ai1")) return "ai1";    
+  if (cls.contains("ai2")) return "ai2";    
+  return null;    
+}    
+
+function handleClick(i) {    
+  if (tiles[i].classList.contains("wall")) return;    
+  const owner = getOwner(i);    
+  if (owner === "main") return;    
+  let neighbors = [i - 1, i + 1, i - 10, i + 10];    
+  for (let n of neighbors) {    
+    if (n >= 0 && n < 100 && getOwner(n) === "main" && troops[n] > 1) {    
+      if (troops[n] > troops[i]) {    
+        setOwner(i, "main");    
+        troops[n] -= troops[i];    
+        troops[i] = troops[n];    
+      } else {    
+        troops[n] = 1;    
+      }    
+      updateTiles();    
+      break;    
+    }    
+  }    
+}    
+
+function buildBarrack() {    
+  const idx = parseInt(prompt("Masukkan index petak untuk barak (0-99):"));    
+  if (    
+    idx >= 0 && idx < 100 &&    
+    getOwner(idx) === "main" &&    
+    !tiles[idx].classList.contains("wall")    
+  ) {    
+    barracks.add(idx);    
+    tiles[idx].classList.add("barrack");    
+    alert("Barak dibangun di petak " + idx);    
+  } else {    
+    alert("Petak tidak valid atau bukan milikmu!");    
+  }    
+}    
+
+function autoGrow() {    
+  for (let i = 0; i < 100; i++) {    
+    if (tiles[i].classList.contains("wall")) continue;    
+    let owner = getOwner(i);    
+    if (owner) {    
+      troops[i] += barracks.has(i) ? 3 : 1;    
+    }    
+  }    
+  updateTiles();    
+}    
+
+function aiActions() {    
+  ["ai1", "ai2"].forEach(faction => {    
+    let owned = tiles.map((t, i) => getOwner(i) === faction ? i : null).filter(i => i !== null);    
+    for (let i of owned) {    
+      let nbs = [i - 1, i + 1, i - 10, i + 10].filter(n =>    
+        n >= 0 && n < 100 &&    
+        !tiles[n].classList.contains("wall")    
+      );    
+      let targets = nbs.filter(n => getOwner(n) !== faction && troops[i] > 1);    
+      if (targets.length > 0) {    
+        let target = targets[Math.floor(Math.random() * targets.length)];    
+        if (troops[i] > troops[target]) {    
+          setOwner(target, faction);    
+          troops[i] -= troops[target];    
+          troops[target] = troops[i];    
+        }    
+      }    
+    }    
+    let randomOwned = owned[Math.floor(Math.random() * owned.length)];    
+    if (randomOwned !== undefined && !barracks.has(randomOwned)) {    
+      barracks.add(randomOwned);    
+    }    
+  });    
+  updateTiles();    
+}    
+
+function updateTiles() {    
+  for (let i = 0; i < 100; i++) {    
+    if (tiles[i].classList.contains("wall")) continue;    
+    tiles[i].innerText = troops[i] || "";    
+    tiles[i].classList.remove("barrack");    
+    if (barracks.has(i)) tiles[i].classList.add("barrack");    
+    let label = tiles[i].querySelector(".label");    
+    if (label) tiles[i].removeChild(label);    
+  }    
+  showFactionNames();    
+}    
+
+function showFactionNames() {    
+  const factions = ["main", "ai1", "ai2"];    
+  factions.forEach(faction => {    
+    let owned = tiles.map((t, i) => getOwner(i) === faction ? i : null).filter(i => i !== null);    
+    if (owned.length === 0) return;    
+    let center = owned[Math.floor(owned.length / 2)];    
+    const label = document.createElement("div");    
+    label.className = "label";    
+    label.innerText = names[faction];    
+    tiles[center].appendChild(label);    
+  });    
+}    
+
+function updateTimer() {    
+  timeLeft--;    
+  timerDiv.innerText = `Sisa waktu: ${timeLeft} detik`;    
+  if (timeLeft <= 0) {    
+    clearInterval(growLoop);    
+    clearInterval(aiLoop);    
+    clearInterval(timerLoop);    
+    declareWinner();    
+  }    
+}    
+
+function declareWinner() {    
+  let count = {};    
+  for (let i = 0; i < 100; i++) {    
+    if (tiles[i].classList.contains("wall")) continue;    
+    let owner = getOwner(i);    
+    if (owner) count[owner] = (count[owner] || 0) + 1;    
+  }    
+  let max = 0, winner = "";    
+  for (let k in count) {    
+    if (count[k] > max) {    
+      max = count[k];    
+      winner = k;    
+    }    
+  }    
+  alert(`⏰ Waktu habis!\nPemenangnya: ${names[winner] || winner} (${max} wilayah)`);    
+}
+
+</script>  </body>
+
+</html>    
+ubah mapnya disini jangan ubah YG lain!!  
